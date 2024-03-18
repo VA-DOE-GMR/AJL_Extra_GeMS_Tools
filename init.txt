@@ -1,0 +1,3 @@
+DEMO_MODE|False
+AUTO_ADD_FIELD|True
+DAS_UPDATE|Z:/PROJECTS/MAPPING/Maps/StateGeoMap_2020/Deliverables_USE_THIS/VAStateGeologicMap-publication/VAStateGeologicMap-database/VAStateGeologicMap.gdb/DataSources
