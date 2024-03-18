@@ -81,8 +81,6 @@ class Initialization_Variables:
 
     def __init__(self):
 
-        self.demo_mode = False
-        self.auto_add_field = False
         self.das_table_gdb_path = None
 
 class GDB_Info:
@@ -227,12 +225,6 @@ def main() -> None:
             for item in line_param.keys():
                 if "\\" in line_param[item]:
                     line_param[item] = line_param[item].replace("\\","/")
-            if 'demo_mode' in line_param.keys():
-                if line_param['demo_mode'] in yes_strings:
-                    init_vars.demo_mode = True
-            if 'auto_add_missing_dasid' in line_param.keys():
-                if line_param['auto_add_missing_dasid'] in yes_strings:
-                    init_vars.add_missing_dasid = True
             if 'das_update' in line_param.keys():
                 init_vars.das_table_gdb_path = line_param['das_update']
             del line_param
@@ -240,8 +232,6 @@ def main() -> None:
             pass
 
     output_trans = {True: "ENABLED",False : "DISABLED"}
-
-    #print("\nDEMO_MODE : %s\n" % output_trans[init_vars.demo_mode])
 
     del yes_strings ; del output_trans
     gc.collect()
