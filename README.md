@@ -38,7 +38,6 @@ DAS_UPDATE (outdated): This variable currently will not affect anything as code 
 1) Ensure functionality on network drives.
 2) Improve UI layout and make it more visually pleasing.
 3) Provide more detailed documentation for how code works.
-4) Debating if License should be changed to CC0.
 
 
 # Known Issues
