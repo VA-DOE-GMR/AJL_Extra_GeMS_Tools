@@ -34,6 +34,18 @@ AUTO_ADD_FIELD (deprecated): Originally meant to give the user the option if he 
 
 DAS_UPDATE (outdated): This variable currently will not affect anything as code associated with it needs to be reworked.
 
+# Running Instructions
+Right-click on "main.py" and either select "Run with ArcGIS Pro" or "Edit with IDLE (ArcGIS Pro)" and run it within IDLE. Please note the right-click context menu may differ depending on the version of Windows OS that you are using as well as other factor; however, it more or less should be the same.
+
+You will be prompted to select a folder. It is expecting you to select a .gdb folder related to a GeMS project. It will not continue continue until a GeMS-related geodatabase is selected.
+
+Note: It is recommended that you create backups of your geodatabase before using this tool to be safe.
+
+# Requirements
+1) ArcGIS Pro 3.1+ (Note: the required Python version and Python modules should be included with the installation of ArcGIS Pro)
+2) Windows OS
+3) 2 GiB of RAM (Minimum)
+
 # Things to be done
 1) Ensure functionality on network drives.
 2) Improve UI layout and make it more visually pleasing.
@@ -45,3 +57,4 @@ DAS_UPDATE (outdated): This variable currently will not affect anything as code 
 2) This has not been tested to work within ArcGIS Pro. It is intended to function outside the program only utilizing the arcpy module.
 3) Terminal log of processes needs to be more thorough and easier to understand what is doing for users.
 4) "Autopopulate DataSources Table" tool cannot currently check and/or update the Excel file containing all DASID values and associated information. This is currently being worked on.
+5) Program has not been tested to be able to run on non-Windows OSs (i.e., specifically, MacOS and Linux variants). It is expected not to work as it was made with running on a Windows OS in mind. Support for such operating systems may be considered in the future if deemed necessary.
