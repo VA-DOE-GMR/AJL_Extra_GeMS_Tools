@@ -28,11 +28,15 @@ This allows the user to add FaultDecorations point feature classes to the geodat
 
 # init.txt
 
-DEMO_MODE (deprecated): Originally meant for demonstrating functionality of this program. This will be eventually removed. It does not affect anything.
+## Related to SDE
 
-AUTO_ADD_FIELD (deprecated): Originally meant to give the user the option if he or she wanted certain tools to automatically add required fields when appropriate. This will be eventually removed. It does not affect anything.
+SDE_SERVER_TYPE: This refers to the type of server being connected to.
 
-DAS_UPDATE (outdated): This variable currently will not affect anything as code associated with it needs to be reworked.
+SDE_INSTANCE: This refers to the specific identifier for the server desired being connected to.
+
+SDE_AUTHENTICATION: This refers to the account authentication process being used in order for the SDE to be valid.
+
+SDE_DATABASE: This specifies the database that the user wants access to.
 
 # Running Instructions
 Right-click on "main.py" and either select "Run with ArcGIS Pro" or "Edit with IDLE (ArcGIS Pro)" and run it within IDLE. Please note the right-click context menu may differ depending on the version of Windows OS that you are using as well as other factor; however, it more or less should be the same.
