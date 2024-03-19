@@ -56,5 +56,4 @@ Note: It is recommended that you create backups of your geodatabase before using
 1) This has been only been tested with Python implimentations available via ArcGIS Pro 3.1+
 2) This has not been tested to work within ArcGIS Pro. It is intended to function outside the program only utilizing the arcpy module.
 3) Terminal log of processes needs to be more thorough and easier to understand what is doing for users.
-4) "Autopopulate DataSources Table" tool cannot currently check and/or update the Excel file containing all DASID values and associated information. This is currently being worked on.
-5) Program has not been tested to be able to run on non-Windows OSs (i.e., specifically, MacOS and Linux variants). It is expected not to work as it was made with running on a Windows OS in mind. Support for such operating systems may be considered in the future if deemed necessary.
+4) Program has not been tested to be able to run on non-Windows OSs (i.e., specifically, MacOS and Linux variants). It is expected not to work as it was made with running on a Windows OS in mind. Support for such operating systems may be considered in the future if deemed necessary.
