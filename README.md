@@ -44,7 +44,7 @@ Note: It is recommended that you create backups of your geodatabase before using
 # Requirements
 1) ArcGIS Pro 3.1+ (Note: the required Python version and Python modules should be included with the installation of ArcGIS Pro)
 2) Windows OS
-3) 2 GiB of RAM (Minimum)
+3) 2 GiB of RAM (Recommended)
 
 # Things to be done
 1) Ensure functionality on network drives.
