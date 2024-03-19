@@ -732,22 +732,6 @@ def main() -> None:
                         cursor.updateRow(row)
                         counter += 1
 
-                if max_counter < current_rows:
-                    selected_oid = []
-                    counter = 0
-                    for row in da.SearchCursor('DataSources',(oid_name := [field.name for field in ListFields('DataSources')][0])):
-                        if counter >= max_counter:
-                            selected_oid.append(row[0])
-                        else:
-                            counter += 1
-                    str_list = f'({selected_oid[0]}'
-                    for x in range(1,len(selected_oid)):
-                        str_list = f"{str_list},{selected_oid[x]}"
-                    str_list = f'{str_list})'
-                    selected_rows,count = mgnt_lb_attribute('DataSources','NEW_SELECTION',"'%s' IN %s" % (oid_name,str_list),"NON_INVERT")
-                    if count:
-                        mgnt_DeleteRows(selected_rows)
-
             print("Data successfully written to DataSources table in geodatabase!")
 
             if dc_object.explicit_rerun:
