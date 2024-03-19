@@ -23,7 +23,7 @@ class Dynamic_Controller:
 
     def __init__(self):
         self.explicit_rerun = None
-        self.net_das_table_found = False
+        self.sde_info = [None,None,None,None]
         self.datasources_created = False
         self.datasources_generated = False
         self.box_vals = [None for n in range(16)]
@@ -63,7 +63,6 @@ mgnt_DeleteField = management.DeleteField
 mgnt_DET = management.DisableEditorTracking
 mgnt_EET = management.EnableEditorTracking
 mgnt_CreateTable = management.CreateTable
-con_TableToExcel = conversion.TableToExcel
 mgnt_CreateFC = management.CreateFeatureclass
 
 SetLogHistory(False) ; SetLogMetadata(False)
@@ -221,12 +220,18 @@ def main() -> None:
 
     if exists("init.txt"):
         try:
-            line_param = {line[:line.find("|")].lower() : line[line.find("|")+1:].lower().rstrip("\n") for line in open("init.txt").readlines()}
+            line_param = {line[:line.find("|")].lower() : line[line.find("|")+1:].rstrip("\n") for line in open("init.txt").readlines()}
             for item in line_param.keys():
                 if "\\" in line_param[item]:
                     line_param[item] = line_param[item].replace("\\","/")
-            if 'das_update' in line_param.keys():
-                init_vars.das_table_gdb_path = line_param['das_update']
+            if 'sde_server_type' in line_param.keys():
+                dc_object.sde_info[0] = line_param['sde_server_type']
+            if 'sde_instance' in line_param.keys():
+                dc_object.sde_info[1] = line_param['sde_instance']
+            if 'sde_authentication' in line_param.keys():
+                dc_object.sde_info[2] = line_param['sde_authentication']
+            if 'sde_database' in line_param.keys():
+                dc_object.sde_info[3] = line_param['sde_database']
             del line_param
         except Exception:
             pass
@@ -588,35 +593,75 @@ def main() -> None:
         if dc_object.explicit_rerun:
             edit = da.Editor(env.workspace) ; edit.startEditing(with_undo=False,multiuser_mode=False) ; edit.startOperation()
         else:
-            print("Attempting to find master list of DASID information (this may take some time depending upon network drive speed)...")
-            if init_vars.das_table_gdb_path is None:
-                print("No pathway/directory/folder for geodatabase containing master table of DASID values designated in 'init.txt'.\nAttempting to find stored Excel copy of table....")
-                if not exists("DataSources.xlsx"):
-                    das_excel = "DataSources.xlsx"
-                elif not exists("DataSources.xls"):
-                    das_excel = "DataSources.xls"
-                else:
-                    error_message("Missing Master Table","This program cannot find any table with a master list of DASIDs to autopopulate fields for DataSources table for this geodatabase.")
-                    return
-            elif Exists(init_vars.das_table_gdb_path):
-                if exists('DataSources.xlsx'):
-                    if exists('_temp'):
-                        rmtree('_temp')
-                    mkdir('_temp')
-                    copyfile('DataSources.xlsx','_temp/DataSources.xlsx')
-                    remove('DataSources.xlsx')
-                try:
-                    con_TableToExcel(init_vars.das_table_gdb_path,f'{getcwd()}/DataSources.xlsx')
-                except Exception:
-                    copyfile('_temp/DataSources.xlsx',f'{getcwd()}/DataSources.xlsx')
+            print("Attempting to find master list of DASID information (this may take some time depending upon internet connection speed as well as dependant upon factors related to the server)...")
+        isConnected = True
+        if exists('DataSources.xlsx'):
+            if exists('_temp'):
                 rmtree('_temp')
-            else:
-                print("Master table cannot be found. Using pre-existing Excel file instead")
+            mkdir('_temp')
+            copyfile('DataSources.xlsx','_temp/DataSources.xlsx')
+            remove('DataSources.xlsx')
+
+        if Exists(f'{getcwd()}/_assets/temp.gdb/DataSources'):
+            mgnt_Delete(f'{getcwd()}/_assets/temp.gdb/DataSources')
+
+        if not exists('_assets/established_link.sde'):
+            try:
+                print("Establishing Connection...")
+                management.CreateDatabaseConnection('_assets','established_link',init_vars.sde_info[0],instance=init_vars.sde_info[1],account_authentication=init_vars.sde_info[2],database=init_vars.sde_info[3])
+            except Exception:
+                isConnected=False
+        else:
+            try:
+                env.workspace = '_assets/temp.gdb'
+                if Exists('DataSources'):
+                    mgnt_Delete('DataSources')
+                try:
+                    env.workspace = '_assets/established.sde'
+                except Exception:
+                    isConnected = False
+                    remove('_assets/established_link.sde')
+                    try:
+                        management.CreateDatabaseConnection('_assets','established_link',init_vars.sde_info[0],instance=init_vars.sde_info[1],account_authentication=init_vars.sde_info[2],database=init_vars.sde_info[3])
+                        isConnected = True
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        if isConnected:
+            try:
+                print("Shifting workspace to SDE...")
+                env.workspace = '_assets/established_link.sde'
+                print("Copying DGMRgeo.DBO.DataSources to temp.gdb...")
+                management.Copy('DGMRgeo.DBO.DataSources',f"{getcwd()}/_assets/temp.gdb/DataSources")
+                print('Shifting workspace to temp.gdb...')
+                env.workspace = '_assets/temp.gdb'
+                print("Generating Excel file from DataSource table in temp.gdb...")
+                conversion.TableToExcel(f'{getcwd()}/_assets/temp.gdb/DataSources',f"{getcwd()}/DataSources.xlsx")
+                print("Generation successful.")
+                rmtree('_temp')
+            except Exception:
+                isConnected = False
+                if exists('DataSource.xlsx'):
+                    remove('DataSources.xlsx')
+                copyfile('_temp/DataSources.xlsx','DataSources.xlsx')
+                rmtree('_temp')
+
+        if not isConnected:
+            if exists('_temp'):
+                if exists('DataSources.xlsx'):
+                    copyfile('_temp/DataSources.xlsx','DataSources.xlsx')
+                    rmtree('_temp')
+
+        if Exists(f'{getcwd()}/_assets/temp.gdb/DataSources'):
+            mgnt_Delete(f'{getcwd()}/_assets/temp.gdb/DataSources')
+
+        env.workspace = check_dir[:]
 
         try:
             if not Exists("DataSources") or not dc_object.datasources_created:
-                print("DataSources table missing/incompleted from geodatabase!\nGenerating DataSources table...")
                 if not Exists("DataSources"):
+                    print("DataSources table missing/incompleted from geodatabase!\nGenerating DataSources table...")
                     mgnt_CreateTable(out_path=env.workspace,out_name='DataSources',out_alias='DataSources')
                     dc_object.datasources_generated = True
                 if not 'Source' in (fields := {field.name for field in ListFields('DataSources')}):
@@ -634,7 +679,7 @@ def main() -> None:
                 if not 'last_edited_user' in fields:
                     mgnt_AddField(in_table='DataSources',field_name='last_edited_user',field_type='TEXT',field_length=255,field_alias='last_edited_user',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
                 if not 'last_edited_date' in fields:
-                    mgnt_AddField(in_table='DataSources',field_name='DataSources_ID',field_type='DATE',field_alias='last_edited_date',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
+                    mgnt_AddField(in_table='DataSources',field_name='last_edited_date',field_type='DATE',field_alias='last_edited_date',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
                 try:
                     mgnt_EET('DataSources','created_user','created_date','last_edited_user','last_edited_date','NO_ADD_FIELDS','UTC')
                 except Exception:
@@ -753,107 +798,6 @@ def main() -> None:
         dc_object.explicit_rerun = False
 
         return
-
-    # Demo functions
-
-    def demo_clear_ID_fields():
-
-        print("Demo: clearing _ID fields excluding DataSources_ID in DataSources table...")
-
-        env.workspace = check_dir[:]
-
-        if dc_object.explicit_rerun:
-            edit = da.Editor(env.workspace) ; edit.startEditing(with_undo=False,multiuser_mode=False) ; edit.startOperation()
-
-        def clear_ID_Fields(dataset : str,fc : str):
-            id_field = None
-            for fld in [field.name for field in ListFields(f"{dataset}/{fc}")]:
-                if fld.endswith("_ID"):
-                    id_field = fld[:]
-                    break
-            with da.UpdateCursor(f"{dataset}/{fc}",[id_field]) as cursor:
-                for row in cursor:
-                    row[0] = None
-                    cursor.updateRow(row)
-
-        try:
-            for a in range(len(gdb_info.datasets)):
-                for b in range(len(gdb_info.pnt_fc_names[a])):
-                    clear_ID_Fields(gdb_info.datasets[a],gdb_info.pnt_fc_names[a][b])
-                for b in range(len(gdb_info.pln_fc_names[a])):
-                    clear_ID_Fields(gdb_info.datasets[a],gdb_info.pln_fc_names[a][b])
-                for b in range(len(gdb_info.poly_fc_names[a])):
-                    clear_ID_Fields(gdb_info.datasets[a],gdb_info.poly_fc_names[a][b])
-
-            for gems_table in ("DescriptionOfMapUnits","Glossary"):
-                if gems_table in gdb_info.tables:
-                    id_field = None
-                    for fld in [field.name for field in ListFields(gems_table)]:
-                        if fld.endswith("_ID"):
-                            id_field = fld[:]
-                            break
-                    with da.UpdateCursor(gems_table,[id_field]) as cursor:
-                        for row in cursor:
-                            row[0] = None
-                            cursor.updateRow(row)
-
-            if dc_object.explicit_rerun:
-                try:
-                    edit.stopOperation()
-                except Exception:
-                    pass
-                try:
-                    edit.stopEditing(save_changes=True)
-                except Exception:
-                    pass
-            print("Process completed successfully.\n")
-        except Exception:
-            if not dc_object.explicit_rerun:
-                print("Denied editing permissions for one or more feature classes and/or tables.\nRerunning with explicit editing requests...\n")
-                dc_object.explicit_rerun = True ; gc.collect() ; demo_clear_ID_fields()
-            else:
-                editorErrorMessage()
-
-        dc_object.explicit_rerun = False
-
-        del id_field
-        gc.collect()
-
-    def demo_clear_pnt_mapunit_fields():
-
-        env.workspace = check_dir[:]
-
-        if dc_object.explicit_rerun:
-            edit = da.Editor(env.workspace) ; edit.startEditing(with_undo=False,multiuser_mode=False) ; edit.startOperation()
-
-        try:
-            for a in range(len(gdb_info.datasets)):
-                for b in range(len(gdb_info.pnt_fc_names[a])):
-                    if "MapUnit" in tuple([field.name for field in ListFields(f"{gdb_info.datasets[a]}/{gdb_info.pnt_fc_names[a][b]}")]):
-                        with da.UpdateCursor(f"{gdb_info.datasets[a]}/{gdb_info.pnt_fc_names[a][b]}",["MapUnit"]) as cursor:
-                            for row in cursor:
-                                row[0] = None
-                                cursor.updateRow(row)
-
-            if dc_object.explicit_rerun:
-                try:
-                    edit.stopOperation()
-                except Exception:
-                    pass
-                try:
-                    edit.stopEditing(save_changes=True)
-                except Exception:
-                    pass
-        except Exception:
-            if not dc_object.explicit_rerun:
-                print("Denied editing permissions for one or more feature classes.\nRerunning with explicit editing requests...\n")
-                dc_object.explicit_rerun = True ; gc.collect() ; demo_clear_pnt_mapunit_fields()
-            else:
-                editorErrorMessage()
-
-        dc_object.explicit_rerun = False
-
-        gc.collect()
 
     def selection_boxes(entry_string : str):
         # W A R N I N G ! W A R N I N G ! W A R N I N G !
@@ -1023,6 +967,10 @@ def main() -> None:
 
         del loop_variable ; del current_dir ; del zip_dir_name ; del base_dir ; del backup_loc ; del user_response
         gc.collect()
+
+    def metadata_get_counties():
+
+        pass
 
     label_auto = Label(root,text="Auto-Complete Tools",font=helv_label,bg='lightblue').place(relx=0.5,rely=0.055,anchor='n')
 
