@@ -9,7 +9,7 @@ This tool resets the identifier fields (i.e. fields with names ending in "_ID" e
 
 ## Fill MapUnit Field for Point Feature Classes
 
-This tool automatically fills out all point feature classes fields with a MapUnit field with the corresponding MapUnit value of the polygon of MapUnitPolys that they are located within. Polygons without MapUnit information (i.e. <Null>) are skipped and ignored for this process.
+This tool automatically fills out all point feature classes fields with a MapUnit field with the corresponding MapUnit value of the polygon of MapUnitPolys that they are located within. Polygons without MapUnit information (i.e. Null values) are skipped and ignored for this process.
 
 ## Alphabetize Glossary Table
 
