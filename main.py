@@ -28,6 +28,7 @@ class Dynamic_Controller:
         self.datasources_generated = False
         self.box_vals = [None for n in range(16)]
         self.backup_gdb = None
+        self.update_master_dasid = None
 
     def append_box_vals(self,item :str,num : int):
 
@@ -590,71 +591,81 @@ def main() -> None:
 
         relevant_fields = {'DataSourceID',"DataSources_ID",'DefinitionSourceID','LocationSourceID','OrientationSourceID'}
 
+        if dc_object.update_master_dasid == None:
+            user_response = yesno_message("Update via SDE?","Would you like to use the most up-to-date master list of DASID information in order to fill out your DataSources table? Select YES for this to work. Please note that this may take several minutes to complete. In addition, you will need to a valid ESRI/ArcGIS Pro account and internet connection for this to work. If you select NO, a pre-existing Microsoft Excel spreadsheet of said master list will be used instead.\n\nAfter selecting either YES or NO, this message will not appear again for the duration that this program is running.")
+            if user_response == 'yes':
+                dc_object.update_master_dasid = True
+            else:
+                dc_object.update_master_dasid = False
+            del user_response
+
         if dc_object.explicit_rerun:
             edit = da.Editor(env.workspace) ; edit.startEditing(with_undo=False,multiuser_mode=False) ; edit.startOperation()
         else:
-            print("Attempting to find master list of DASID information (this may take some time depending upon internet connection speed as well as dependant upon factors related to the server)...")
-        isConnected = True
-        if exists('DataSources.xlsx'):
-            if exists('_temp'):
-                rmtree('_temp')
-            mkdir('_temp')
-            copyfile('DataSources.xlsx','_temp/DataSources.xlsx')
-            remove('DataSources.xlsx')
-
-        if Exists(f'{getcwd()}/_assets/temp.gdb/DataSources'):
-            mgnt_Delete(f'{getcwd()}/_assets/temp.gdb/DataSources')
-
-        if not exists('_assets/established_link.sde'):
-            try:
-                print("Establishing Connection...")
-                management.CreateDatabaseConnection('_assets','established_link',init_vars.sde_info[0],instance=init_vars.sde_info[1],account_authentication=init_vars.sde_info[2],database=init_vars.sde_info[3])
-            except Exception:
-                isConnected=False
-        else:
-            try:
-                env.workspace = '_assets/temp.gdb'
-                if Exists('DataSources'):
-                    mgnt_Delete('DataSources')
+            if dc_object.update_master_dasid:
+                print("Attempting to find master list of DASID information (this may take some time depending upon internet connection speed as well as dependant upon factors related to the server)...")
+        if dc_object.update_master_dasid:
+            isConnected = True
+            if exists('DataSources.xlsx'):
+                if exists('_temp'):
+                    rmtree('_temp')
+                mkdir('_temp')
+                copyfile('DataSources.xlsx','_temp/DataSources.xlsx')
+                remove('DataSources.xlsx')
+    
+            if Exists(f'{getcwd()}/_assets/temp.gdb/DataSources'):
+                mgnt_Delete(f'{getcwd()}/_assets/temp.gdb/DataSources')
+    
+            if not exists('_assets/established_link.sde'):
                 try:
-                    env.workspace = '_assets/established.sde'
+                    print("Establishing Connection...")
+                    management.CreateDatabaseConnection('_assets','established_link',init_vars.sde_info[0],instance=init_vars.sde_info[1],account_authentication=init_vars.sde_info[2],database=init_vars.sde_info[3])
+                except Exception:
+                    isConnected=False
+            else:
+                try:
+                    env.workspace = '_assets/temp.gdb'
+                    if Exists('DataSources'):
+                        mgnt_Delete('DataSources')
+                    try:
+                        env.workspace = '_assets/established.sde'
+                    except Exception:
+                        isConnected = False
+                        remove('_assets/established_link.sde')
+                        try:
+                            management.CreateDatabaseConnection('_assets','established_link',init_vars.sde_info[0],instance=init_vars.sde_info[1],account_authentication=init_vars.sde_info[2],database=init_vars.sde_info[3])
+                            isConnected = True
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+            if isConnected:
+                try:
+                    print("Shifting workspace to SDE...")
+                    env.workspace = '_assets/established_link.sde'
+                    print("Copying DGMRgeo.DBO.DataSources to temp.gdb...")
+                    management.Copy('DGMRgeo.DBO.DataSources',f"{getcwd()}/_assets/temp.gdb/DataSources")
+                    print('Shifting workspace to temp.gdb...')
+                    env.workspace = '_assets/temp.gdb'
+                    print("Generating Excel file from DataSource table in temp.gdb...")
+                    conversion.TableToExcel(f'{getcwd()}/_assets/temp.gdb/DataSources',f"{getcwd()}/DataSources.xlsx")
+                    print("Generation successful.")
+                    rmtree('_temp')
                 except Exception:
                     isConnected = False
-                    remove('_assets/established_link.sde')
-                    try:
-                        management.CreateDatabaseConnection('_assets','established_link',init_vars.sde_info[0],instance=init_vars.sde_info[1],account_authentication=init_vars.sde_info[2],database=init_vars.sde_info[3])
-                        isConnected = True
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-        if isConnected:
-            try:
-                print("Shifting workspace to SDE...")
-                env.workspace = '_assets/established_link.sde'
-                print("Copying DGMRgeo.DBO.DataSources to temp.gdb...")
-                management.Copy('DGMRgeo.DBO.DataSources',f"{getcwd()}/_assets/temp.gdb/DataSources")
-                print('Shifting workspace to temp.gdb...')
-                env.workspace = '_assets/temp.gdb'
-                print("Generating Excel file from DataSource table in temp.gdb...")
-                conversion.TableToExcel(f'{getcwd()}/_assets/temp.gdb/DataSources',f"{getcwd()}/DataSources.xlsx")
-                print("Generation successful.")
-                rmtree('_temp')
-            except Exception:
-                isConnected = False
-                if exists('DataSource.xlsx'):
-                    remove('DataSources.xlsx')
-                copyfile('_temp/DataSources.xlsx','DataSources.xlsx')
-                rmtree('_temp')
-
-        if not isConnected:
-            if exists('_temp'):
-                if exists('DataSources.xlsx'):
+                    if exists('DataSource.xlsx'):
+                        remove('DataSources.xlsx')
                     copyfile('_temp/DataSources.xlsx','DataSources.xlsx')
                     rmtree('_temp')
-
-        if Exists(f'{getcwd()}/_assets/temp.gdb/DataSources'):
-            mgnt_Delete(f'{getcwd()}/_assets/temp.gdb/DataSources')
+    
+            if not isConnected:
+                if exists('_temp'):
+                    if exists('DataSources.xlsx'):
+                        copyfile('_temp/DataSources.xlsx','DataSources.xlsx')
+                        rmtree('_temp')
+    
+            if Exists(f'{getcwd()}/_assets/temp.gdb/DataSources'):
+                mgnt_Delete(f'{getcwd()}/_assets/temp.gdb/DataSources')
 
         env.workspace = check_dir[:]
 
