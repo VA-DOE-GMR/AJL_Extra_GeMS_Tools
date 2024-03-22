@@ -160,19 +160,6 @@ root2.update() ; root2.destroy()
 
 gc.collect()
 
-def getFeatureFieldParameters(feature_name : str) -> (None,dict):
-
-    wb = load_workbook(f"{getcwd()}/Field_Properties.xlsx")
-
-    if feature_name in wb.sheetnames:
-        sh = wb[feature_name]
-        output_dict = {sh['A%i' % (a+2)].value : (sh['B%i' % (a+2)].value,sh['C%i' % (a+2)].value,sh['D%i' % (a+2)].value,sh['E%i' % (a+2)].value,sh['F%i' % (a+2)].value,sh['G%i' % (a+2)].value,sh['H%i' % (a+2)].value,sh['I%i' % (a+2)].value) for a in range(sh.max_row-1)}
-        wb.close()
-        return output_dict
-    else:
-        wb.close()
-        return None
-
 def main() -> None:
 
     valid_selection = False
