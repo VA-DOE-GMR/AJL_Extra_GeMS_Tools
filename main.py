@@ -11,7 +11,9 @@ from regex import sub
 from zipfile import ZipFile,ZIP_DEFLATED
 import gc
 from openpyxl import load_workbook
+from tqdm import tqdm
 
+# General shorthands
 error_message = messagebox.showerror
 yesno_message = messagebox.askquestion
 confirm_message = messagebox.askokcancel
@@ -19,6 +21,8 @@ ttk_Checkbox = ttk.Checkbutton
 
 setlocale(LC_ALL,'')
 
+# This for special variables and functions used for this program as well used as
+# a sort of trigger-based/flagging system.
 class Dynamic_Controller:
 
     def __init__(self):
@@ -30,7 +34,8 @@ class Dynamic_Controller:
         self.backup_gdb = None
         self.update_master_dasid = None
 
-    def append_box_vals(self,item :str,num : int):
+    # For dynamic GUI display.
+    def append_box_vals(self,item : str,num : int):
 
         if item == 'NIHIL':
             self.box_vals[num] = None
@@ -39,6 +44,8 @@ class Dynamic_Controller:
 
 dc_object = Dynamic_Controller()
 
+# As of ArcGIS Pro 3.1.3, the ArcPy module requires the largest amount of RAM-
+# utilization compared to all other Python-based modules.
 print("Initializing ArcPy module...")
 try:
     from arcpy import env,da,management,SetLogHistory,SetLogMetadata,ListDatasets,ListFeatureClasses,Describe,ListFields,ListTables,Exists,conversion,Describe
@@ -54,18 +61,18 @@ except Exception:
         input("Press Enter/Return to close this program: ")
         exit()
 
-mgnt_mfl = management.MakeFeatureLayer
-mgnt_AddField = management.AddField
-mgnt_lb_attribute = management.SelectLayerByAttribute
-mgnt_lb_location = management.SelectLayerByLocation
+# These are mainly for shorthand and slight optimization purposes.
+da_SC = da.SearchCursor
+da_UC = da.UpdateCursor
+mgnt_CreateFC = management.CreateFeatureclass
 mgnt_Delete = management.Delete
-mgnt_DeleteRows = management.DeleteRows
 mgnt_DeleteField = management.DeleteField
 mgnt_DET = management.DisableEditorTracking
-mgnt_EET = management.EnableEditorTracking
-mgnt_CreateTable = management.CreateTable
-mgnt_CreateFC = management.CreateFeatureclass
+mgnt_lb_attribute = management.SelectLayerByAttribute
+mgnt_lb_location = management.SelectLayerByLocation
+mgnt_mfl = management.MakeFeatureLayer
 
+# Disables unnecessary process logging.
 SetLogHistory(False) ; SetLogMetadata(False)
 
 try:
@@ -85,7 +92,7 @@ class Initialization_Variables:
 
 class GDB_Info:
 
-    def __init__(self,gdb_path):
+    def __init__(self, gdb_path : str):
 
         self.pnt_fc_names = []
         self.pln_fc_names = []
@@ -159,6 +166,7 @@ ws = root2.winfo_screenwidth() ; hs = root2.winfo_screenheight()
 root2.update() ; root2.destroy()
 
 gc.collect()
+
 
 def main() -> None:
 
@@ -245,14 +253,48 @@ def main() -> None:
 
     def switchGDB():
         print("Changing selected geodatabase....")
-        gc.collect()
-        root.destroy()
+        gc.collect() ; root.destroy()
         dc_object.backup_gdb = None
         main()
+
+    # def point_mapunit2():
+    #
+    #     env.workspace = check_dir[:]
+    #
+    #     if not dc_object.explicit_rerun:
+    #         user_response = yesno_message("Tool Explanation","This automatically fills out the MapUnit field present in point feature classes based upon which MapUnitPolys polygon that they \"intersect\".\nSelect NO to return to the main menu. Select YES to proceed.")
+    #         if user_response == 'no':
+    #             return
+    #         del user_response
+    #         gc.collect()
+    #
+    #     if dc_object.explicit_rerun:
+    #         edit = da.Editor(env.workspace) ; edit.startEditing(with_undo=False,multiuser_mode=False) ; edit.startOperation()
+    #
+    #     poly_lyrs = []
+    #     counter = 0
+    #     poly_fc = []
+    #     for a in range(len(gdb_info.datasets)):
+    #         for b in range(len(gdb_info.poly_fc_names[a])):
+    #             if 'MapUnitPolys' in gdb_info.poly_fc_names[a][b]:
+    #                 poly_fc.append(f'{gdb_info.datasets[a]}/{gdb_info.poly_fc_names[a][b]}')
+    #                 mgnt_mfl(f'{gdb_info.datasets[a]}/{gdb_info.poly_fc_names[a][b]}',f'poly_lyr_{counter}')
+    #                 poly_lyrs.append(f'poly_lyr_{counter}')
+    #                 counter += 1
+    #                 break
+    #
+    #     poly_mapunits = dict()
 
     def point_mapunit():
 
         env.workspace = check_dir[:]
+
+        if not dc_object.explicit_rerun:
+            user_response = yesno_message("Tool Explanation","This automatically fills out the MapUnit field present in point feature classes based upon which MapUnitPolys polygon that they \"intersect\".\nSelect NO to return to the main menu. Select YES to proceed.")
+            if user_response == 'no':
+                return
+            del user_response
+            gc.collect()
 
         if dc_object.explicit_rerun:
             edit = da.Editor(env.workspace) ; edit.startEditing(with_undo=False,multiuser_mode=False) ; edit.startOperation()
@@ -276,7 +318,7 @@ def main() -> None:
                 else:
                     poly_lyr = mgnt_mfl(f"{gdb_info.datasets[a]}/{prefix}MapUnitPolys","mapunit_poly_lyr")
                     try:
-                        mapunit_vals = tuple(sorted({row[0] for row in da.SearchCursor(f"{gdb_info.datasets[a]}/{prefix}MapUnitPolys",["MapUnit"]) if not row[0] is None}))
+                        mapunit_vals = tuple(sorted({row[0] for row in da_SC(f"{gdb_info.datasets[a]}/{prefix}MapUnitPolys",["MapUnit"]) if not row[0] is None}))
                     except:
                         error_message("Missing Field",f"'{prefix}MapUnitPolys' is missing 'MapUnit' field.")
                         if dc_object.explicit_rerun:
@@ -339,14 +381,14 @@ def main() -> None:
                             selected_pnts,redundant,count = mgnt_lb_location(pnt_lyrs[b],"INTERSECT",selected_polys,"","NEW_SELECTION","NOT_INVERT")
                             del redundant
                             if count:
-                                for row in da.SearchCursor(selected_pnts,[oid_field_name[b]]):
+                                for row in da_SC(selected_pnts,[oid_field_name[b]]):
                                     pnt_objectid[b].append(row[0])
                                     pnt_mapunit[b].append(unit)
                             else:
                                 continue
                     pnt_objectid = tuple(pnt_objectid) ; pnt_mapunit = tuple(pnt_mapunit)
                     for b in range(len(relevant_fc)):
-                        with da.UpdateCursor(f"{gdb_info.datasets[a]}/{relevant_fc[b]}",[oid_field_name[b],"MapUnit"]) as cursor:
+                        with da_UC(f"{gdb_info.datasets[a]}/{relevant_fc[b]}",[oid_field_name[b],"MapUnit"]) as cursor:
                             for row in cursor:
                                 if row[0] in pnt_objectid[b]:
                                     row[1] = pnt_mapunit[b][pnt_objectid[b].index(row[0])]
@@ -374,13 +416,18 @@ def main() -> None:
             else:
                 editorErrorMessage()
 
-        dc_object.explicit_rerun = False
-
-        gc.collect()
+        dc_object.explicit_rerun = False ; gc.collect()
 
     def resetFcId():
 
         env.workspace = check_dir[:]
+
+        if not dc_object.explicit_rerun:
+            user_response = yesno_message("Tool Explanation","This redoes the numbering for all feature class and table fields ending with \"_ID\", excluding DataSources and GeoMaterialDict, and numbers them according to OID order. This also ensures that no numbers are skipped.\nSelect NO to return to the main menu. Select YES to proceed.")
+            if user_response == 'no':
+                return
+            del user_response
+            gc.collect()
 
         if dc_object.explicit_rerun:
             edit = da.Editor(env.workspace) ; edit.startEditing(with_undo=False,multiuser_mode=False) ; edit.startOperation()
@@ -395,10 +442,10 @@ def main() -> None:
                     break
             root_name = getRootName(fc)
             num_rows = 0 ; counter = 1
-            for row in da.SearchCursor(f"{dataset}/{fc}",id_field):
+            for row in da_SC(f"{dataset}/{fc}",id_field):
                 num_rows += 1
             num_rows_str_len = len(str(num_rows))
-            with da.UpdateCursor(f"{dataset}/{fc}",id_field) as cursor:
+            with da_UC(f"{dataset}/{fc}",id_field) as cursor:
                 for row in cursor:
                     row[0] = "%s%s%i" % (root_name,"0" * (num_rows_str_len-len(str(counter))),counter)
                     cursor.updateRow(row)
@@ -422,10 +469,10 @@ def main() -> None:
                             break
                     root_name = getRootName(gems_table)
                     num_rows = 0 ; counter = 1
-                    for row in da.SearchCursor(gems_table,[id_field]):
+                    for row in da_SC(gems_table,[id_field]):
                         num_rows += 1
                     num_rows_str_len = len(str(num_rows))
-                    with da.UpdateCursor(gems_table,[id_field]) as cursor:
+                    with da_UC(gems_table,[id_field]) as cursor:
                         for row in cursor:
                             row[0] = "%s%s%i" % (root_name,"0" * (num_rows_str_len-len(str(counter))),counter)
                             cursor.updateRow(row)
@@ -449,15 +496,20 @@ def main() -> None:
             else:
                 editorErrorMessage()
 
-        dc_object.explicit_rerun = False
-
-        gc.collect()
+        dc_object.explicit_rerun = False ; gc.collect()
 
     def removeETfields():
 
         env.workspace = check_dir[:]
 
-        if not confirm_message("Confirm Editor Tracking Removal","These changes cannot be reverted and Editor Tracking related data be restored. Proceed?"):
+        if not dc_object.explicit_rerun:
+            user_response = yesno_message("Tool Explanation","This removes fields related to Editor Tracking (i.e. created_user, created_date, last_edited_user, and last_edited_date) by first disabling editor tracking for all feature classes and tables and then deleting those fields.\nSelect NO to return to the main menu. Select YES to proceed.")
+            if user_response == 'no':
+                return
+            del user_response
+            gc.collect()
+
+        if not confirm_message("Confirm Editor Tracking Removal","These changes cannot be reverted and Editor Tracking related data be restored.\nProceed?\nSelect CANCEL to abort."):
             print("\nRemoval Editor Tracking related data aborted!\n")
             return
 
@@ -507,9 +559,7 @@ def main() -> None:
             else:
                 editorErrorMessage()
 
-        dc_object.explicit_rerun = False
-
-        gc.collect()
+        dc_object.explicit_rerun = False ; gc.collect()
 
     def end_window():
         print("Closing program....")
@@ -519,10 +569,15 @@ def main() -> None:
 
         env.workspace = check_dir[:]
 
+        if not dc_object.explicit_rerun:
+            user_response = yesno_message("Tool Explanation","This reorganizes the entries in the Glossary table so that the terms are listed in alphabetical order. Aside from reordering, no data in Glossary will be added, modified, and/or removed if ran.\nSelect NO to return to the main menu. Select YES to proceed.")
+            if user_response == 'no':
+                return
+            del user_response
+            gc.collect()
+
         if dc_object.explicit_rerun:
             edit = da.Editor(env.workspace) ; edit.startEditing(with_undo=False,multiuser_mode=False) ; edit.startOperation()
-        else:
-            print("\nOrganizing Glossary terms in alphabetical order...")
 
         if not "Glossary" in gdb_info.tables:
             error_message("Missing Glossary","No Glossary table was found!")
@@ -539,7 +594,7 @@ def main() -> None:
                 del counter
             try:
                 glossary_term = [] ; glossary_def = [] ; unknown_counter = 1
-                for row in da.SearchCursor("Glossary",required_fields):
+                for row in da_SC("Glossary",required_fields):
                     if row[0] is None:
                         glossary_term.append(f"zzz_UNKNOWN_{unknown_counter}")
                         unknown_counter += 1
@@ -551,7 +606,7 @@ def main() -> None:
                     glossary_def.append((row[1],row[2]))
                 del unknown_counter
                 glossary_term = tuple(glossary_term) ; glossary_def = tuple(glossary_def) ; ordered = tuple(sorted(glossary_term,key=str.lower)) ; counter = 0
-                with da.UpdateCursor("Glossary",required_fields) as cursor:
+                with da_UC("Glossary",required_fields) as cursor:
                     for row in cursor:
                         row[0] = glossary_term[(num_index := glossary_term.index(ordered[counter]))]
                         row[1] = glossary_def[num_index][0]
@@ -566,9 +621,7 @@ def main() -> None:
                 else:
                     editorErrorMessage()
 
-        dc_object.explicit_rerun = False
-
-        gc.collect()
+        dc_object.explicit_rerun = False ; gc.collect()
 
         print("Alphabetizing successful!\n")
 
@@ -578,13 +631,20 @@ def main() -> None:
 
         relevant_fields = {'DataSourceID',"DataSources_ID",'DefinitionSourceID','LocationSourceID','OrientationSourceID'}
 
+        if not dc_object.explicit_rerun:
+            user_response = yesno_message("Tool Explanation","This takes all entries for all feature classes and tables, excluding DataSources and GeoMaterialDict, with the DataSourceID, DefinitionSourceID, and/or LocationSourceID as fields in order to compile them and automatically make entries for DataSources table. This is done by taking a master list containing related information of sources referenced from the DASID values.\n\nIf a DataSources table does not exist, one will be generated for your project and it will be filled out automatically.\n\nSelect NO to return to the main menu. Select YES to proceed.")
+            if user_response == 'no':
+                return
+
         if dc_object.update_master_dasid == None:
-            user_response = yesno_message("Update via SDE?","Would you like to use the most up-to-date master list of DASID information in order to fill out your DataSources table? Select YES for this to work. Please note that this may take several minutes to complete. In addition, you will need to a valid ESRI/ArcGIS Pro account and internet connection for this to work. If you select NO, a pre-existing Microsoft Excel spreadsheet of said master list will be used instead.\n\nAfter selecting either YES or NO, this message will not appear again for the duration that this program is running.")
+            user_response = yesno_message("Update via SDE?","Would you like to use the most up-to-date master list of DASID information in order to fill out your DataSources table?\n\nSelect YES for this to work. Please note that this may take several minutes to complete. In addition, you will need to a valid ESRI/ArcGIS Pro account and internet connection for this to work. If you select NO, a pre-existing Microsoft Excel spreadsheet of said master list will be used instead.\n\nAfter selecting either YES or NO, this message will not appear again for the duration that this program is running.")
             if user_response == 'yes':
                 dc_object.update_master_dasid = True
             else:
                 dc_object.update_master_dasid = False
             del user_response
+
+        gc.collect()
 
         if dc_object.explicit_rerun:
             edit = da.Editor(env.workspace) ; edit.startEditing(with_undo=False,multiuser_mode=False) ; edit.startOperation()
@@ -599,10 +659,10 @@ def main() -> None:
                 mkdir('_temp')
                 copyfile('DataSources.xlsx','_temp/DataSources.xlsx')
                 remove('DataSources.xlsx')
-    
+
             if Exists(f'{getcwd()}/_assets/temp.gdb/DataSources'):
                 mgnt_Delete(f'{getcwd()}/_assets/temp.gdb/DataSources')
-    
+
             if not exists('_assets/established_link.sde'):
                 try:
                     print("Establishing Connection...")
@@ -644,13 +704,13 @@ def main() -> None:
                         remove('DataSources.xlsx')
                     copyfile('_temp/DataSources.xlsx','DataSources.xlsx')
                     rmtree('_temp')
-    
+
             if not isConnected:
                 if exists('_temp'):
                     if exists('DataSources.xlsx'):
                         copyfile('_temp/DataSources.xlsx','DataSources.xlsx')
                         rmtree('_temp')
-    
+
             if Exists(f'{getcwd()}/_assets/temp.gdb/DataSources'):
                 mgnt_Delete(f'{getcwd()}/_assets/temp.gdb/DataSources')
 
@@ -660,26 +720,26 @@ def main() -> None:
             if not Exists("DataSources") or not dc_object.datasources_created:
                 if not Exists("DataSources"):
                     print("DataSources table missing/incompleted from geodatabase!\nGenerating DataSources table...")
-                    mgnt_CreateTable(out_path=env.workspace,out_name='DataSources',out_alias='DataSources')
+                    management.CreateTable(out_path=env.workspace,out_name='DataSources',out_alias='DataSources')
                     dc_object.datasources_generated = True
                 if not 'Source' in (fields := {field.name for field in ListFields('DataSources')}):
-                    mgnt_AddField(in_table='DataSources',field_name='Source',field_type='TEXT',field_length=500,field_alias='Source',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
+                    management.AddField(in_table='DataSources',field_name='Source',field_type='TEXT',field_length=500,field_alias='Source',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
                 if not 'Notes' in fields:
-                    mgnt_AddField(in_table='DataSources',field_name='Notes',field_type='TEXT',field_length=300,field_alias='Notes',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
+                    management.AddField(in_table='DataSources',field_name='Notes',field_type='TEXT',field_length=300,field_alias='Notes',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
                 if not 'URL' in fields:
-                    mgnt_AddField(in_table='DataSources',field_name='URL',field_type='TEXT',field_length=300,field_alias='URL',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
+                    management.AddField(in_table='DataSources',field_name='URL',field_type='TEXT',field_length=300,field_alias='URL',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
                 if not 'DataSources_ID' in fields:
-                    mgnt_AddField(in_table='DataSources',field_name='DataSources_ID',field_type='TEXT',field_length=300,field_alias='DataSources_ID',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
+                    management.AddField(in_table='DataSources',field_name='DataSources_ID',field_type='TEXT',field_length=300,field_alias='DataSources_ID',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
                 if not 'created_user' in fields:
-                    mgnt_AddField(in_table='DataSources',field_name='created_user',field_type='TEXT',field_length=255,field_alias='created_user',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
+                    management.AddField(in_table='DataSources',field_name='created_user',field_type='TEXT',field_length=255,field_alias='created_user',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
                 if not 'created_date' in fields:
-                    mgnt_AddField(in_table='DataSources',field_name='created_date',field_type='DATE',field_alias='created_date',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
+                    management.AddField(in_table='DataSources',field_name='created_date',field_type='DATE',field_alias='created_date',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
                 if not 'last_edited_user' in fields:
-                    mgnt_AddField(in_table='DataSources',field_name='last_edited_user',field_type='TEXT',field_length=255,field_alias='last_edited_user',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
+                    management.AddField(in_table='DataSources',field_name='last_edited_user',field_type='TEXT',field_length=255,field_alias='last_edited_user',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
                 if not 'last_edited_date' in fields:
-                    mgnt_AddField(in_table='DataSources',field_name='last_edited_date',field_type='DATE',field_alias='last_edited_date',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
+                    management.AddField(in_table='DataSources',field_name='last_edited_date',field_type='DATE',field_alias='last_edited_date',field_is_nullable='NULLABLE',field_is_required='NON_REQUIRED')
                 try:
-                    mgnt_EET('DataSources','created_user','created_date','last_edited_user','last_edited_date','NO_ADD_FIELDS','UTC')
+                    management.EnableEditorTracking('DataSources','created_user','created_date','last_edited_user','last_edited_date','NO_ADD_FIELDS','UTC')
                 except Exception:
                     pass
                 del fields
@@ -704,7 +764,7 @@ def main() -> None:
             def getDASID(item_path : str) -> None:
                 if (fields := tuple([field.name for field in ListFields(item_path) if field.name in relevant_fields])):
                     num_fields = len(fields)
-                    for row in da.SearchCursor(item_path,fields):
+                    for row in da_SC(item_path,fields):
                         for n in range(num_fields):
                             if row[n] is None:
                                 continue
@@ -757,7 +817,7 @@ def main() -> None:
                         cursor.insertRow((valid_dasids[valid_keys[n]][0],valid_dasids[valid_keys[n]][1],valid_dasids[valid_keys[n]][2],valid_keys[n]))
             else:
                 current_rows = 0
-                for row in da.SearchCursor('DataSources',['DataSources_ID']):
+                for row in da_SC('DataSources',['DataSources_ID']):
                     current_rows += 1
                 if (new_rows := len(valid_keys) - current_rows) > 0:
                     with da.InsertCursor('DataSources',['Source','Notes','URL','DataSources_ID']) as cursor:
@@ -765,7 +825,7 @@ def main() -> None:
                             cursor.insertRow((None,None,None,None))
                 max_counter = len(valid_keys)
                 counter = 0
-                with da.UpdateCursor('DataSources',['Source','Notes','URL','DataSources_ID']) as cursor:
+                with da_UC('DataSources',['Source','Notes','URL','DataSources_ID']) as cursor:
                     for row in cursor:
                         if counter == max_counter:
                             break
@@ -793,9 +853,79 @@ def main() -> None:
             else:
                 editorErrorMessage()
 
-        dc_object.explicit_rerun = False
+        dc_object.explicit_rerun = False ; gc.collect()
 
         return
+
+    # WIP
+    def autopopulateSymbol():
+
+        env.workspace = check_dir[:]
+
+        if not dc_object.explicit_rerun:
+            user_response = yesno_message("Tool Explanation","This automatically fills out the Symbol field present in polygon feature classes based upon the matching value in the Symbol field in the DescriptionOfMapUnits table.\n\nSelect NO to return to the main menu. Select YES to proceed.")
+            if user_response == 'no':
+                return
+            del user_response
+            gc.collect()
+
+        if dc_object.explicit_rerun:
+            edit = da.Editor(env.workspace) ; edit.startEditing(with_undo=False,multiuser_mode=False) ; edit.startOperation()
+
+        if not 'DescriptionOfMapUnits' in gdb_info.tables:
+            error_message("Missing DescriptionOfMapUnits","DescriptionOfMapUnits table seems to be missing from this project. Please create and fill out DescriptionOfMapUnits before running this tool again!")
+            return
+
+        print("Obtaining MapUnit and Symbol data from DescriptionOfMapUnits table...")
+
+        mapunit_symbol = dict()
+
+        for row in da_SC("DescriptionOfMapUnits",["MapUnit","Symbol"]):
+            if None in (row[0],row[1]) or row[0] in set(mapunit_symbol.keys()):
+                continue
+            mapunit_symbol[row[0]] = row[1]
+
+        if not len(mapunit_symbol):
+            return
+
+        relevant_fc = []
+
+        print("Determining relevant polygon feature classes...")
+
+        for a in range(len(gdb_info.datasets)):
+            for b in range(len(gdb_info.poly_fc_names[a])):
+                fields = {field.name for field in ListFields(f'{gdb_info.datasets[a]}/{gdb_info.poly_fc_names[a][b]}')}
+                if 'MapUnit' in fields and 'Symbol' in fields:
+                    relevant_fc.append((gdb_info.datasets[a],gdb_info.poly_fc_names[a][b]))
+
+        del fields
+        gc.collect()
+
+        try:
+            print("Iterating through relevant polygon feature classes...")
+            for fc in tqdm((relevant_fc := tuple(relevant_fc))):
+                with da_UC(f'{fc[0]}/{fc[1]}',['MapUnit','Symbol']) as cursor:
+                    for row in cursor:
+                        if row[0] != None:
+                            row[1] = mapunit_symbol[row[0]]
+                        cursor.updateRow(row)
+            if dc_object.explicit_rerun:
+                try:
+                    edit.stopOperation()
+                except Exception:
+                    pass
+                try:
+                    edit.stopEditing(save_changes=True)
+                except Exception:
+                    pass
+        except Exception:
+            if not dc_object.explicit_rerun:
+                print("Denied editing permissions for polygon feature classes.\nRerunning with explicit editing requests...\n")
+                dc_object.explicit_rerun = True ; gc.collect() ; autopopulateSymbol()
+            else:
+                editorErrorMessage()
+
+        dc_object.explicit_rerun = False ; gc.collect()
 
     def selection_boxes(entry_string : str):
         # W A R N I N G ! W A R N I N G ! W A R N I N G !
@@ -812,6 +942,12 @@ def main() -> None:
         root2.geometry('300x200')
         root2.resizable(False,False)
         root2.title('Selection')
+
+        def disable_event():
+            pass
+
+        # This prevents softlocking the program.
+        root2.protocol("WM_DELETE_WINDOW",disable_event)
 
         box_var = [StringVar(root2) for n in range(16)]
 
@@ -867,6 +1003,9 @@ def main() -> None:
 
         env.workspace = check_dir[:]
 
+        if dc_object.box_vals.count(None) == 16:
+            return
+
         def terminal_string():
             if 16 - dc_object.box_vals.count(None) == 1:
                 print("Generating %s..." % entry_string)
@@ -889,26 +1028,26 @@ def main() -> None:
                         mgnt_CreateFC(out_path=relevant_datasets[a],out_name=now_f_nomin,geometry_type="POINT",spatial_reference=gdb_info.spatial_reference[a])
                         current_fc = f'{relevant_datasets[a]}/{now_f_nomin}'
                         if not 'Symbol' in (fields := {field.name for field in ListFields(current_fc)}):
-                            mgnt_AddField(in_table=current_fc,field_name='Symbol',field_type='TEXT',field_length=254,field_alias='Symbol',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
+                            management.AddField(in_table=current_fc,field_name='Symbol',field_type='TEXT',field_length=254,field_alias='Symbol',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
                         if not 'PlotAtScale' in fields:
-                            mgnt_AddField(in_table=current_fc,field_name='PlotAtScale',field_type='FLOAT',field_alias='PlotAtScale',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
+                            management.AddField(in_table=current_fc,field_name='PlotAtScale',field_type='FLOAT',field_alias='PlotAtScale',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
                         if not 'DataSourceID' in fields:
-                            mgnt_AddField(in_table=current_fc,field_name='DataSourceID',field_type='TEXT',field_length=50,field_alias='DataSourceID',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
+                            management.AddField(in_table=current_fc,field_name='DataSourceID',field_type='TEXT',field_length=50,field_alias='DataSourceID',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
                         if not 'Notes' in fields:
-                            mgnt_AddField(in_table=current_fc,field_name='Notes',field_type='TEXT',field_length=254,field_alias='Notes',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
+                            management.AddField(in_table=current_fc,field_name='Notes',field_type='TEXT',field_length=254,field_alias='Notes',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
                         if not 'created_user' in fields:
-                            mgnt_AddField(in_table=current_fc,field_name='created_user',field_type='TEXT',field_length=255,field_alias='created_user',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
+                            management.AddField(in_table=current_fc,field_name='created_user',field_type='TEXT',field_length=255,field_alias='created_user',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
                         if not 'created_date' in fields:
-                            mgnt_AddField(in_table=current_fc,field_name='created_date',field_type='DATE',field_alias='created_date',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
+                            management.AddField(in_table=current_fc,field_name='created_date',field_type='DATE',field_alias='created_date',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
                         if not 'last_edited_user' in fields:
-                            mgnt_AddField(in_table=current_fc,field_name='last_edited_user',field_type='TEXT',field_length=255,field_alias='last_edited_user',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
+                            management.AddField(in_table=current_fc,field_name='last_edited_user',field_type='TEXT',field_length=255,field_alias='last_edited_user',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
                         if not 'last_edited_date' in fields:
-                            mgnt_AddField(in_table=current_fc,field_name='last_edited_date',field_type='DATE',field_alias='last_edited_date',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
+                            management.AddField(in_table=current_fc,field_name='last_edited_date',field_type='DATE',field_alias='last_edited_date',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
                         if not 'Azimuth' in fields:
-                            mgnt_AddField(in_table=current_fc,field_name='Azimuth',field_type='FLOAT',field_alias='Azimuth',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
+                            management.AddField(in_table=current_fc,field_name='Azimuth',field_type='FLOAT',field_alias='Azimuth',field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
                         if not '%s_ID' % now_f_nomin in fields:
-                            mgnt_AddField(in_table=current_fc,field_name='%s_ID' % now_f_nomin,field_type='TEXT',field_length=50,field_alias='%s_ID' % now_f_nomin,field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
-                        mgnt_EET(current_fc,'created_user','created_date','last_edited_user','last_edited_date','NO_ADD_FIELDS','UTC')
+                            management.AddField(in_table=current_fc,field_name='%s_ID' % now_f_nomin,field_type='TEXT',field_length=50,field_alias='%s_ID' % now_f_nomin,field_is_nullable="NULLABLE",field_is_required="NON_REQUIRED")
+                        management.EnableEditorTracking(current_fc,'created_user','created_date','last_edited_user','last_edited_date','NO_ADD_FIELDS','UTC')
                     if dc_object.explicit_rerun:
                         try:
                             edit.stopOperation()
@@ -966,9 +1105,35 @@ def main() -> None:
         del loop_variable ; del current_dir ; del zip_dir_name ; del base_dir ; del backup_loc ; del user_response
         gc.collect()
 
-    def metadata_get_counties():
+    # WIP
+    def metadata_get_divisions():
 
-        pass
+        invalid_spatial_items = ('FaultDecorations','CartographicLines')
+
+        spatial_items = []
+
+        def getSpatialItems(names):
+            for n in range(len(names)):
+                invalid_found = False
+                for item in invalid_spatial_items:
+                    if names[n] in invalid_spatial_items:
+                        invalid_found = True
+                        break
+                if invalid_found:
+                    continue
+                # Determines if there are any items in the feature class.
+                counter = 0
+                for row in da_SC(names[n],[field.name for field in ListFields(f"{gdb_info.datasets[0]}/{names[n]}")][0]):
+                    counter += 1
+                    if counter >= 1:
+                        break
+                if counter >= 1:
+                    spatial_items.append(names[n])
+
+        getSpatialItems(gdb_info.pnt_fc_names[0])
+        getSpatialItems(gdb_info.pln_fc_names[0])
+        getSpatialItems(gdb_info.poly_fc_names[0])
+
 
     label_auto = Label(root,text="Auto-Complete Tools",font=helv_label,bg='lightblue').place(relx=0.5,rely=0.055,anchor='n')
 
@@ -980,15 +1145,17 @@ def main() -> None:
 
     btn_auto_das = Button(root,text="Autopopulate DataSources Table",command=autopopulateDAS,font=helv_button,bg='lightgrey',activebackground='grey').place(relx=0.5,rely=0.265,anchor='n')
 
-    btn_remove_ET = Button(root,text="Disable Editor Tracking\n and Delete Related Fields",font=helv_button,command=removeETfields,bg='lightgrey',activebackground='grey').place(relx=0.5,rely=0.31,anchor='n')
+    btn_auto_symbol = Button(root,text="Fill Symbol Field for\nPolygon Feature Classes",command=autopopulateSymbol,font=helv_button,bg='lightgrey',activebackground='grey').place(relx=0.5,rely=0.31,anchor='n')
 
-    label_new_gen = Label(root,text="New-Gen. Tools",font=helv_label,bg='lightblue').place(relx=0.5,rely=0.455,anchor='n')
+    btn_remove_ET = Button(root,text="Disable Editor Tracking\n and Delete Related Fields",font=helv_button,command=removeETfields,bg='lightgrey',activebackground='grey').place(relx=0.5,rely=0.375,anchor='n')
 
-    btn_backup_gdb = Button(root,text="Create Geodatabase Backup",command=gen_backup,font=helv_button,bg='lightgrey',activebackground='grey').place(relx=0.5,rely=0.51,anchor='n')
+    label_new_gen = Label(root,text="New-Gen. Tools",font=helv_label,bg='lightblue').place(relx=0.5,rely=0.555,anchor='n')
 
-    btn_gen_faultdecorations = Button(root,text="FaultDecorations",font=helv_button,command=partial(selection_boxes,'FaultDecorations'),bg='lightgrey',activebackground='grey').place(relx=0.5,rely=0.555,anchor='n')
+    btn_backup_gdb = Button(root,text="Create Geodatabase Backup",command=gen_backup,font=helv_button,bg='lightgrey',activebackground='grey').place(relx=0.5,rely=0.61,anchor='n')
 
-    btn_switch_gdb = Button(root,text="Switch Selected\nGeodatabase",font=helv_button,command=switchGDB,bg='royalblue',activebackground='grey').place(relx=0.9,rely=0.9,anchor='n')
+    btn_gen_faultdecorations = Button(root,text="FaultDecorations",font=helv_button,command=partial(selection_boxes,'FaultDecorations'),bg='lightgrey',activebackground='grey').place(relx=0.5,rely=0.655,anchor='n')
+
+    btn_switch_gdb = Button(root,text="Switch Selected\nGeodatabase",font=helv_button,command=switchGDB,bg='royalblue',activebackground='grey').place(relx=0.915,rely=0.915,anchor='n')
 
     root.mainloop()
 
