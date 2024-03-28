@@ -19,6 +19,10 @@ This tool reorders the items in the Glossary table so that the terms are in alph
 
 This tool finds all DASID values used in the GeMS geodatabase currently selected and fills out the DataSources table with said information based upon the DataSources.xlsx file that contains all information related to DASIDs. The DataSources.xlsx is replaced with an updated version of the list of DASIDs if one is found.
 
+## Fill Symbol Field for Polygon Feature Classes
+
+This tool automatically fills out all MapUnitPolys and MapUnitOverlayPolys Symbol fields based upon information from DescriptionOfMapUnits table. Polygons without MapUnit information (i.e. Null values) are skipped and ignored for this process.
+
 ## Disable Editor Tracking and Delete Related Fields
 
 This tool disables ArcGIS Pro's Editor Tracking for all tables and feature classes with this enabled and then deletes tables related to this information. This information will not affect vital information for GeMS feature classes and tables; however, the removal of Editor Tracking related fields is not reversable. Ergo, a warning is presented that clarifies that this change is permanent. This is done as the other tools currently made for this program do not explicitly alter pre-existing features and/or tables in this manner.
